@@ -1,0 +1,180 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "TESTVMNAME": {
+            "defaultValue": "TESTVM",
+            "type": "string"
+        },
+        "osType": {
+            "defaultValue": "Windows Server 2019 Datacenter",
+            "allowedValues": [
+                "Windows Server 2016 Datacenter",
+                "Windows Server 2019 Datacenter"
+            ],
+            "type": "string",
+            "metadata": {
+                "description": "The type of the operating system you want to deploy."
+            }
+        },
+        "Admin User": {
+            "defaultValue": "MSADMIN",
+            "type": "string"
+        },
+        "Admin password": {
+            "defaultValue": null,
+            "type": "securestring"
+        },
+        "VM_SKU": {
+            "defaultValue": "Standard_DS11_v2",
+            "allowedValues": [
+                "Standard_DS11_v2",
+                "Standard_DS12_V2",
+                "Standard_D2s_v3",
+                "Standard_D4s_v3",
+                "Standard_E2_v3",
+                "Standard_E4_v3",
+                "Standard_E2s_v3",
+                "Standard_E4s_v3"
+            ],
+            "type": "string",
+            "metadata": {
+                "description": "The selected VM Size."
+            }
+        },
+        "Region": {
+            "defaultValue": "Standard_EastUs2",
+            "type": "securestring"
+        },
+        "Subnet_DB": {
+            "defaultValue": "/subscriptions/288bec52-bdf6-42f8-98b8-a8ce54026c44/resourceGroups/VDI/providers/Microsoft.Network/virtualNetworks/VNET/subnets/default",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "TESTVM_Name": "[parameters('TESTVMNAME')]",
+        "TESTVM_NIC0_Name": "[concat(variables('TESTVM_Name'), '_NIC0')]",
+        "TESTVM_PIP_Name": "[concat(variables('TESTVM_NIC0_Name'),'_PIP0')]",
+        "images": {
+            "Windows Server 2016 Datacenter": {
+                "sku": "2016-Datacenter",
+                "offer": "WindowsServer",
+                "publisher": "MicrosoftWindowsServer",
+                "OSType": "Windows"
+            },
+            "Windows Server 2019 Datacenter": {
+                "sku": "2019-Datacenter",
+                "offer": "WindowsServer",
+                "publisher": "MicrosoftWindowsServer",
+                "OSType": "Windows"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2019-11-01",
+            "name": "[variables('TESTVM_PIP_Name')]",
+            "location": "eastus2",
+            "sku": {
+                "name": "Basic"
+            },
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Dynamic",
+                "idleTimeoutInMinutes": 4,
+                "ipTags": []
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-07-01",
+            "name": "[variables('TESTVM_Name')]",
+            "location": "eastus2",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('TESTVM_NIC0_Name'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "Standard_E2s_v3"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "2016-Datacenter",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "name": "[concat(variables('TESTVM_Name'), '_osdisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite"
+                    },
+                    "dataDisks": [
+                        {
+                            "lun": 0,
+                            "name": "[concat(variables('TESTVM_Name'), '_DataDisk0')]",
+                            "createOption": "Empty",
+                            "DiskSizeGB": 512,
+                            "caching": "None",
+                            "toBeDetached": false
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[variables('TESTVM_Name')]",
+                    "adminUsername": "[parameters('Admin User')]",
+                    "adminPassword": "[parameters('Admin password')]",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('TESTVM_NIC0_Name'))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2019-11-01",
+            "name": "[concat(variables('TESTVM_Name'), '_NIC0')]",
+            "location": "eastus2",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('TESTVM_PIP_NAME'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAddress": "10.1.1.9",
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('TESTVM_PIP_NAME'))]"
+                            },
+                            "subnet": {
+                                "id": "[parameters('Subnet_DB')]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": []
+                },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false
+            }
+        }
+    ],
+    "outputs": {}
+}
